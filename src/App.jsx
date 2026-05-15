@@ -14,6 +14,11 @@ import {
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://fkgzdecpcesudabwfcxp.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdWJhc2UiLCJzZWIiOiJmS2d6ZGVjcGNlc3VkYWJ3ZmN4cCJ9.gZ25-_GSUSx64h-K0-hyuv6WriOMmUPP1f2YL4dMuFc';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const App = () => {
   const [view, setView] = useState('landing'); // landing, register, dashboard, admin
@@ -21,6 +26,7 @@ const App = () => {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -28,12 +34,23 @@ const App = () => {
     address: '',
     products: ''
   });
-  const [listings, setListings] = useState([
-    { id: 1, role: 'komisyoncu', name: 'Mersin Tarım Ticaret', products: 'Domates, Biber, Salatalık', phone: '05330000000', address: 'Mersin Hal Kompleksi No: 12', date: '2026-05-15' },
-    { id: 2, role: 'tuccar', name: 'Ankara Gıda Ltd', products: 'Limon, Mandalina', phone: '05440000000', address: 'Ankara Toptancı Hali', date: '2026-05-14' },
-    { id: 3, role: 'komisyoncu', name: 'Kurtuluş Sebze', products: 'Patlıcan, Kabak', phone: '05550000000', address: 'Mersin Hal No: 45', date: '2026-05-15' },
-    { id: 4, role: 'tuccar', name: 'İstanbul Hal Market', products: 'Biber, Domates, Patates', phone: '05660000000', address: 'Bayrampaşa Hali', date: '2026-05-13' },
-  ]);
+  const [listings, setListings] = useState([]);
+
+  // Fetch listings from Supabase
+  useEffect(() => {
+    fetchListings();
+  }, []);
+
+  const fetchListings = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('listings')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (data) setListings(data);
+    setLoading(false);
+  };
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
@@ -46,20 +63,41 @@ const App = () => {
     }
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    const newUser = {
-      id: Date.now(),
+    const newListing = {
       role: userRole,
-      date: new Date().toISOString().split('T')[0],
-      ...formData
+      name: formData.name,
+      phone: formData.phone,
+      address: formData.address,
+      products: formData.products,
+      date: new Date().toISOString().split('T')[0]
     };
-    setListings([newUser, ...listings]);
-    setView('dashboard');
+
+    const { data, error } = await supabase
+      .from('listings')
+      .insert([newListing])
+      .select();
+
+    if (error) {
+      alert('Veritabanı hatası: ' + error.message);
+    } else {
+      setListings([data[0], ...listings]);
+      setView('dashboard');
+    }
   };
 
-  const deleteListing = (id) => {
-    setListings(listings.filter(item => item.id !== id));
+  const deleteListing = async (id) => {
+    const { error } = await supabase
+      .from('listings')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert('Silme hatası: ' + error.message);
+    } else {
+      setListings(listings.filter(item => item.id !== id));
+    }
   };
 
   const AdminDashboard = () => {
@@ -298,42 +336,53 @@ const App = () => {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
-        {listings.map(item => (
-          <motion.div 
-            layout
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            key={item.id} 
-            className="glass-card" 
-            style={{ borderLeft: `4px solid ${item.role === 'komisyoncu' ? 'var(--primary)' : 'var(--secondary)'}` }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '0.75rem', padding: '4px 12px', borderRadius: '20px', background: item.role === 'komisyoncu' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(230, 126, 34, 0.1)', color: item.role === 'komisyoncu' ? 'var(--primary)' : 'var(--secondary)', fontWeight: 600 }}>
-                {item.role.toUpperCase()}
-              </span>
-              <Phone size={16} color="var(--text-muted)" />
-            </div>
-            <h4 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>{item.name}</h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              <MapPin size={14} />
-              {item.address}
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Package size={14} /> Ürünler:
+        {loading ? (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem' }}>
+            <div className="loader" style={{ margin: '0 auto 1rem' }}></div>
+            <p style={{ color: 'var(--text-muted)' }}>İlanlar yükleniyor...</p>
+          </div>
+        ) : listings.length === 0 ? (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem' }}>
+            <p style={{ color: 'var(--text-muted)' }}>Henüz ilan bulunmuyor.</p>
+          </div>
+        ) : (
+          listings.map(item => (
+            <motion.div 
+              layout
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              key={item.id} 
+              className="glass-card" 
+              style={{ borderLeft: `4px solid ${item.role === 'komisyoncu' ? 'var(--primary)' : 'var(--secondary)'}` }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.75rem', padding: '4px 12px', borderRadius: '20px', background: item.role === 'komisyoncu' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(230, 126, 34, 0.1)', color: item.role === 'komisyoncu' ? 'var(--primary)' : 'var(--secondary)', fontWeight: 600 }}>
+                  {item.role.toUpperCase()}
+                </span>
+                <Phone size={16} color="var(--text-muted)" />
               </div>
-              <div style={{ fontWeight: 500 }}>{item.products}</div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
-              <a href={`https://wa.me/${item.phone}`} target="_blank" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: '0.9rem' }}>
-                <MessageSquare size={18} /> WhatsApp
-              </a>
-              <a href={`tel:${item.phone}`} className="btn btn-secondary" style={{ padding: '0.8rem' }}>
-                <Phone size={18} />
-              </a>
-            </div>
-          </motion.div>
-        ))}
+              <h4 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>{item.name}</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                <MapPin size={14} />
+                {item.address}
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Package size={14} /> Ürünler:
+                </div>
+                <div style={{ fontWeight: 500 }}>{item.products}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.8rem' }}>
+                <a href={`https://wa.me/${item.phone}`} target="_blank" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: '0.9rem' }}>
+                  <MessageSquare size={18} /> WhatsApp
+                </a>
+                <a href={`tel:${item.phone}`} className="btn btn-secondary" style={{ padding: '0.8rem' }}>
+                  <Phone size={18} />
+                </a>
+              </div>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );
