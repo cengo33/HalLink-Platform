@@ -16,8 +16,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://fkgzdecpcesudabwfcxp.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdWJhc2UiLCJyZWYiOiJma2d6ZGVjcGNlc3VkYWJ3ZmN4cCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc4ODY0Mzc0LCJleHAiOjIwOTQ0NDAzNzR9.gZ25-_GSUSx64h-K0-hyuv6WriOMmUPP1f2YL4dMuFc';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const App = () => {
